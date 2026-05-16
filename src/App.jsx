@@ -59,6 +59,7 @@ export default function App() {
   const [maxAgeDays, setMaxAgeDays] = useState(180);
   const [onlyPersonIntent, setOnlyPersonIntent] = useState(true);
   const [filteredProviderCount, setFilteredProviderCount] = useState(0);
+  const [filteredIrrelevantCount, setFilteredIrrelevantCount] = useState(0);
 
   const fetchLeads = async () => {
     setLoading(true); setError(""); setWarning("");
@@ -74,6 +75,7 @@ export default function App() {
       setLeads(data.leads || []);
       setWarning(data.warning || "");
       setFilteredProviderCount(data.filtered_provider_count || 0);
+      setFilteredIrrelevantCount(data.filtered_irrelevant_count || 0);
     } catch {
       setError("Network error.");
     } finally { setLoading(false); }
@@ -109,6 +111,7 @@ export default function App() {
     {error && <p style={styles.err}>{error}</p>}{warning && <p>{warning}</p>}
     <p style={{color: BRAND.muted, marginTop: 0}}>This tool prioritizes public posts from people showing building/remodeling intent. Contact details are only shown when publicly available.</p>
     <p style={{color: BRAND.muted}}>Provider/company pages filtered out: {filteredProviderCount}</p>
+    <p style={{color: BRAND.muted}}>Irrelevant/non-intent pages filtered out: {filteredIrrelevantCount}</p>
 
     <div style={styles.filters}>
       <select value={locationFilter} onChange={(e)=>setLocationFilter(e.target.value)}>{LOCATIONS.map(v=><option key={v}>{v}</option>)}</select>
