@@ -1,17 +1,16 @@
 import { useMemo, useState } from "react";
 
 const DEFAULT_QUERIES = [
-  "looking to build a house in Costa Rica",
-  "architect Costa Rica custom home",
-  "buy land build home Costa Rica",
-  "Costa Rica vacation rental development",
-  "build Airbnb Costa Rica",
-  "retiring in Costa Rica build home",
-  "Guanacaste architect build house",
-  "Tamarindo build villa",
-  "Nosara custom home",
-  "Uvita build rental property",
-  "Costa Rica construction permit architect",
+  "site:reddit.com \"looking for architect\" \"Costa Rica\"",
+  "site:reddit.com \"need architect\" \"Costa Rica\"",
+  "\"planning to build\" \"Costa Rica\" \"architect\" forum",
+  "\"buy land\" \"Costa Rica\" \"build house\" forum",
+  "\"retiring in Costa Rica\" \"build home\"",
+  "\"build Airbnb\" \"Costa Rica\" \"architect\"",
+  "\"recommend architect\" \"Costa Rica\"",
+  "\"moving to Costa Rica\" \"build a house\"",
+  "\"need help building\" \"Costa Rica\"",
+  "\"construction permits\" \"Costa Rica\" \"architect\" forum",
 ];
 
 const LOCATIONS = ["All","Guanacaste","Tamarindo","Nosara","Uvita","Dominical","Manuel Antonio","San José","Atenas","Escazú","Santa Ana","Caribbean/Limón"];
@@ -58,6 +57,8 @@ export default function App() {
   const [contactFilter, setContactFilter] = useState("all");
   const [minRelevance, setMinRelevance] = useState(1);
   const [maxAgeDays, setMaxAgeDays] = useState(180);
+  const [onlyPersonIntent, setOnlyPersonIntent] = useState(true);
+  const [filteredProviderCount, setFilteredProviderCount] = useState(0);
 
   const fetchLeads = async () => {
     setLoading(true); setError(""); setWarning("");
@@ -65,19 +66,21 @@ export default function App() {
       const res = await fetch("/api/search-leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password, queries: queries.split("\n").map((q) => q.trim()).filter(Boolean), maxAgeDays }),
+        body: JSON.stringify({ password, queries: queries.split("\n").map((q) => q.trim()).filter(Boolean), maxAgeDays, onlyPersonIntent }),
       });
       const data = await res.json();
       if (res.status === 401) { setAuthed(false); setError("Invalid password."); return; }
       if (!res.ok) { setError(data.error || "Search failed."); return; }
       setLeads(data.leads || []);
       setWarning(data.warning || "");
+      setFilteredProviderCount(data.filtered_provider_count || 0);
     } catch {
       setError("Network error.");
     } finally { setLoading(false); }
   };
 
   const filteredLeads = useMemo(() => leads.filter((l) => {
+    if (onlyPersonIntent && l.intent_type === "Company/Provider") return false;
     if ((l.relevance || 0) < minRelevance) return false;
     if (locationFilter !== "All" && !(l.location || "").toLowerCase().includes(locationFilter.toLowerCase().replace("/", " "))) return false;
     if (typeFilter !== "All" && l.lead_type !== typeFilter) return false;
@@ -86,10 +89,10 @@ export default function App() {
     if (contactFilter === "has contact URL" && !l.contact_url) return false;
     if (contactFilter === "no direct contact" && (l.email || l.phone)) return false;
     return true;
-  }), [leads, minRelevance, locationFilter, typeFilter, contactFilter]);
+  }), [leads, minRelevance, locationFilter, typeFilter, contactFilter, onlyPersonIntent]);
 
   const exportCsv = () => {
-    const fields = ["name","company_or_profile","lead_type","need","location","country_or_origin","email","phone","website","social_url","contact_url","source_platform","source_url","published_at","published_at_source","evidence_text","relevance","confidence","recommended_outreach"];
+    const fields = ["name","company_or_profile","lead_type","intent_type","need","location","country_or_origin","email","phone","website","social_url","contact_url","source_platform","source_url","published_at","published_at_source","evidence_text","relevance","confidence","recommended_outreach"];
     const lines = [fields.join(","), ...filteredLeads.map((lead) => fields.map((f) => `"${String(lead[f] || "").replace(/"/g,'""')}"`).join(","))];
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -104,6 +107,8 @@ export default function App() {
     <textarea rows={7} style={styles.input} value={queries} onChange={(e)=>setQueries(e.target.value)} />
     <button style={styles.btn} onClick={fetchLeads} disabled={loading}>{loading ? "Searching public sources..." : "Search Leads"}</button>
     {error && <p style={styles.err}>{error}</p>}{warning && <p>{warning}</p>}
+    <p style={{color: BRAND.muted, marginTop: 0}}>This tool prioritizes public posts from people showing building/remodeling intent. Contact details are only shown when publicly available.</p>
+    <p style={{color: BRAND.muted}}>Provider/company pages filtered out: {filteredProviderCount}</p>
 
     <div style={styles.filters}>
       <select value={locationFilter} onChange={(e)=>setLocationFilter(e.target.value)}>{LOCATIONS.map(v=><option key={v}>{v}</option>)}</select>
@@ -111,12 +116,13 @@ export default function App() {
       <select value={contactFilter} onChange={(e)=>setContactFilter(e.target.value)}>{CONTACT_STATUS.map(v=><option key={v}>{v}</option>)}</select>
       <label>Min relevance: {minRelevance}<input type="range" min="1" max="10" value={minRelevance} onChange={(e)=>setMinRelevance(Number(e.target.value))}/></label>
       <label>Max age days<input type="number" min="1" max="3650" value={maxAgeDays} onChange={(e)=>setMaxAgeDays(Number(e.target.value) || 180)} /></label>
+      <label style={{display:"flex", alignItems:"center", gap:8}}><input type="checkbox" checked={onlyPersonIntent} onChange={(e)=>setOnlyPersonIntent(e.target.checked)} />Only person-intent leads</label>
       <button style={styles.btnSecondary} onClick={exportCsv}>Export CSV</button>
     </div>
 
     {filteredLeads.map((lead, i) => <div key={i} style={styles.card}>
       <h3>{lead.name || lead.company_or_profile || "Unnamed public profile"}</h3>
-      <p><b>Need:</b> {lead.need}</p><p><b>Type:</b> {lead.lead_type} · <b>Location:</b> {lead.location} · <b>Relevance:</b> {lead.relevance}/10</p>
+      <p><b>Need:</b> {lead.need}</p><p><b>Type:</b> {lead.lead_type} · <b>Intent:</b> <span style={{padding:"2px 8px", borderRadius:999, border:`1px solid ${lead.intent_type === "Person Intent Lead" ? "#22c55e" : lead.intent_type === "Company/Provider" ? "#ef4444" : "#f59e0b"}`}}>{lead.intent_type === "Person Intent Lead" ? "Intent Lead" : lead.intent_type === "Company/Provider" ? "Provider/Company" : "Unclear"}</span> · <b>Location:</b> {lead.location} · <b>Relevance:</b> {lead.relevance}/10</p>
       <p><b>Email:</b> {lead.email || ""} <b>Phone:</b> {lead.phone || ""}</p>
       <p><b>Website:</b> {lead.website || ""}</p>
       <p><b>Published:</b> {lead.published_at ? new Date(lead.published_at).toLocaleDateString() : "Unknown"} ({lead.published_at_source || "unknown"})</p>
