@@ -5,28 +5,64 @@ const FETCH_TIMEOUT_MS = 12000;
 const DEFAULT_MAX_AGE_DAYS = 180;
 
 const DEFAULT_QUERIES = [
-  'site:reddit.com "looking for architect" "Costa Rica"',
-  'site:reddit.com "need architect" "Costa Rica"',
-  '"planning to build" "Costa Rica" "architect" forum',
-  '"buy land" "Costa Rica" "build house" forum',
+  'site:reddit.com/r/costarica "recommend architect"',
+  'site:reddit.com/r/expats "Costa Rica" "architect"',
+  'site:reddit.com/r/IWantOut "Costa Rica" "build house"',
+  'site:reddit.com/r/realestateinvesting "Costa Rica" "build"',
+  '"Costa Rica expat forum" "recommend architect"',
+  '"Costa Rica expat forum" "build a house"',
+  '"Costa Rica forum" "need architect"',
+  '"moving to Costa Rica" "build house" "forum"',
+  '"bought land in Costa Rica" "build house"',
   '"retiring in Costa Rica" "build home"',
-  '"build Airbnb" "Costa Rica" "architect"',
-  '"recommend architect" "Costa Rica"',
-  '"moving to Costa Rica" "build a house"',
-  '"need help building" "Costa Rica"',
-  '"construction permits" "Costa Rica" "architect" forum',
 ];
 
-const LOCATION_KEYWORDS = [
-  "guanacaste","tamarindo","nosara","uvita","dominical","manuel antonio","san jose","san josé","atenas","escazu","escazú","santa ana","limon","limón","caribbean","costa rica"
+const SOURCE_PRIORITIES = ["reddit.com", "forum", "expat", "iwantout", "realestateinvesting"];
+const PERSON_INTENT_PATTERNS = [
+  /\bi am looking for an architect\b/i,
+  /\bwe are looking for an architect\b/i,
+  /\bcan anyone recommend an architect\b/i,
+  /\bdoes anyone know an architect\b/i,
+  /\bi want to build\b/i,
+  /\bwe want to build\b/i,
+  /\bi am planning to build\b/i,
+  /\bwe are planning to build\b/i,
+  /\bi bought land and want to build\b/i,
+  /\bwe bought land\b/i,
+  /\bi need help with permits\b/i,
+  /\bwe need (a )?(builder|architect)\b/i,
+  /\bmoving to costa rica and want to build\b/i,
+  /\bretiring in costa rica and want to build\b/i,
+  /\bbuilding an? (airbnb|vacation rental)\b/i,
 ];
-const PERSON_INTENT_PHRASES = [
-  "looking for an architect","looking for architect","need an architect","need architect","want to build","planning to build","buying land and building","retiring in costa rica and want to build","building a vacation rental","build an airbnb in costa rica","recommend an architect","need help with permits","need help with design","need help with construction","moving to costa rica build",
+
+const PROVIDER_SIGNALS = [
+  /\bby\s+[a-z0-9\s&-]*(architect|studio|firm)\b/i,
+  /\barchitects\b/i,
+  /\barchitecture firm\b/i,
+  /\bstudio\b/i,
+  /\bdesign studio\b/i,
+  /\bportfolio\b/i,
+  /\bproject\b/i,
+  /\bvilla by\b/i,
+  /\bhouse by\b/i,
+  /\bart villas\b/i,
+  /\bour services\b/i,
+  /\bcontact us\b/i,
+  /\babout us\b/i,
+  /\bwe design\b/i,
+  /\bwe build\b/i,
+  /\baward-winning\b/i,
+  /\barchitecture magazine\b/i,
+  /\barchdaily\b/i,
+  /\bdezeen\b/i,
+  /\bamazing_architecture\b/i,
+  /\barchviz\b/i,
+  /\binterior designer\b/i,
 ];
-const PROVIDER_EXCLUSION_PHRASES = [
-  "architecture firm","construction company","design studio","real estate agency","brokerage","investment firm","our services","about us","portfolio","team","contact us","projects","listings","architect directory"
-];
-const SOURCE_PRIORITIES = ["reddit.com", "forum", "boards", "expat", "quora", "tripadvisor"];
+
+const SHOWCASE_DOMAINS = ["archdaily", "dezeen", "amazing_architecture", "archviz", "behance.net", "dribbble.com"];
+const LOCATION_KEYWORDS = ["costa rica","guanacaste","tamarindo","nosara","uvita","dominical","manuel antonio","san jose","san josé","atenas","escazu","escazú","santa ana","limon","limón"];
 
 const SAFE_HEADERS = {
   "User-Agent": "AKStudioLeadFinder/1.0 (+https://akstudio.example; respectful crawling)",
@@ -34,11 +70,6 @@ const SAFE_HEADERS = {
 };
 
 const normalize = (s = "") => s.toLowerCase().replace(/\s+/g, " ").trim();
-const getIp = (req) => {
-  const xff = req.headers["x-forwarded-for"];
-  if (Array.isArray(xff)) return xff[0];
-  return (xff || req.socket?.remoteAddress || "unknown").split(",")[0].trim();
-};
 
 function extractEmails(text) {
   return [...new Set((text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || []).map((e) => e.trim()))];
@@ -53,42 +84,6 @@ function extractPhones(text) {
 function stripHtml(html = "") {
   return html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
-function detectLocation(text) {
-  const lc = normalize(text);
-  const found = LOCATION_KEYWORDS.find((k) => lc.includes(k));
-  return found ? found.replace(/\b\w/g, (m) => m.toUpperCase()) : "Costa Rica";
-}
-function getLeadType(text) {
-  const lc = normalize(text);
-  if (lc.includes("airbnb") || lc.includes("vacation rental") || lc.includes("invest")) return "Investor/Airbnb";
-  if (lc.includes("retiring") || lc.includes("relocation") || lc.includes("expat") || lc.includes("moving")) return "Expat relocation";
-  if (lc.includes("land") || lc.includes("buy land")) return "Land buyer";
-  if (lc.includes("remodel") || lc.includes("renovation")) return "Renovation/remodel";
-  if (lc.includes("developer")) return "Developer";
-  if (lc.includes("homeowner") || lc.includes("house")) return "Local homeowner";
-  return "Unknown";
-}
-function classifyIntent(text, url) {
-  const lc = normalize(`${text} ${url}`);
-  const intentHits = PERSON_INTENT_PHRASES.filter((p) => lc.includes(p)).length;
-  const providerHits = PROVIDER_EXCLUSION_PHRASES.filter((p) => lc.includes(p)).length;
-  if (providerHits > 0 && intentHits === 0) return "Company/Provider";
-  if (intentHits > 0) return "Person Intent Lead";
-  return "Unclear";
-}
-function scoreLead({ text, location, hasContact, intentType, sourceUrl }) {
-  const lc = normalize(text);
-  let score = 1;
-  const intentHits = PERSON_INTENT_PHRASES.filter((p) => lc.includes(p)).length;
-  score += Math.min(5, intentHits * 2);
-  if (location && location !== "Costa Rica") score += 2;
-  if (hasContact) score += 1;
-  if (SOURCE_PRIORITIES.some((p) => sourceUrl.toLowerCase().includes(p))) score += 1;
-  if (intentType === "Company/Provider") score = 1;
-  if (intentType === "Unclear") score = Math.min(score, 4);
-  return Math.max(1, Math.min(10, score));
-}
-
 function parseDateCandidate(value) {
   if (!value || typeof value !== "string") return null;
   const d = new Date(value);
@@ -106,6 +101,71 @@ function extractPublishedDateFromHtml(html = "") {
   return { date: null, source: "unknown" };
 }
 const isOlderThanDays = (date, days) => date ? (Date.now() - date.getTime()) > days * 86400000 : false;
+
+function detectLocation(text) {
+  const lc = normalize(text);
+  const found = LOCATION_KEYWORDS.find((k) => lc.includes(k));
+  return found ? found.replace(/\b\w/g, (m) => m.toUpperCase()) : "Costa Rica";
+}
+function getLeadType(text) {
+  const lc = normalize(text);
+  if (lc.includes("airbnb") || lc.includes("vacation rental") || lc.includes("invest")) return "Investor/Airbnb";
+  if (lc.includes("retiring") || lc.includes("relocation") || lc.includes("expat") || lc.includes("moving")) return "Expat relocation";
+  if (lc.includes("land") || lc.includes("buy land")) return "Land buyer";
+  if (lc.includes("remodel") || lc.includes("renovation")) return "Renovation/remodel";
+  if (lc.includes("developer")) return "Developer";
+  if (lc.includes("house") || lc.includes("home")) return "Local homeowner";
+  return "Unknown";
+}
+
+function extractNeedFromEvidence(evidenceText) {
+  const lc = normalize(evidenceText);
+  const snippets = [
+    "looking for an architect",
+    "need an architect",
+    "planning to build",
+    "want to build",
+    "bought land and want to build",
+    "need help with permits",
+    "building an airbnb",
+    "building a vacation rental",
+    "recommend an architect",
+  ];
+  const found = snippets.find((s) => lc.includes(s));
+  return found || "";
+}
+
+function isValidPersonIntentLead({ source_url, evidence_text, title, snippet, pageText }) {
+  const reasons = [];
+  const combined = `${title} ${snippet} ${evidence_text} ${source_url} ${pageText}`;
+  const lc = normalize(combined);
+
+  if (!source_url) reasons.push("missing_source_url");
+  if (!evidence_text) reasons.push("missing_evidence_text");
+
+  const hasIntent = PERSON_INTENT_PATTERNS.some((re) => re.test(evidence_text));
+  if (!hasIntent) reasons.push("missing_strong_person_intent_in_evidence");
+
+  if (PROVIDER_SIGNALS.some((re) => re.test(lc))) reasons.push("provider_signal_detected");
+  if (SHOWCASE_DOMAINS.some((d) => lc.includes(d))) reasons.push("showcase_domain_or_subreddit");
+  if (/\b(villa|house|project)\s+by\b/i.test(lc)) reasons.push("completed_project_by_studio_pattern");
+
+  return { valid: reasons.length === 0, reasons };
+}
+
+function scoreLead({ evidenceText, location, hasContact, sourceUrl }) {
+  const hasIntent = PERSON_INTENT_PATTERNS.some((re) => re.test(evidenceText));
+  if (!hasIntent) return 0;
+  const combined = normalize(`${evidenceText} ${sourceUrl}`);
+  if (PROVIDER_SIGNALS.some((re) => re.test(combined))) return 0;
+  if (/\b(villa|house|project)\s+by\b/i.test(combined)) return 0;
+
+  let score = 6;
+  if (location && location !== "Costa Rica") score += 1;
+  if (hasContact) score += 1;
+  if (SOURCE_PRIORITIES.some((p) => sourceUrl.toLowerCase().includes(p))) score += 1;
+  return Math.min(10, Math.max(1, score));
+}
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = FETCH_TIMEOUT_MS) {
   const ctrl = new AbortController();
@@ -136,8 +196,9 @@ function deduplicate(leads) {
     return true;
   });
 }
+
 function buildOutreach(lead) {
-  return `Hi ${lead.name || "there"}, I saw your public post about ${lead.need}. AK Studio / Arquinautas CR supports people planning projects in Costa Rica, from concept and permits to design and build. If useful, we can share a short roadmap tailored to your project.`;
+  return `Hi ${lead.name || "there"}, I saw your public post about ${lead.need}. AK Studio / Arquinautas CR helps people planning to build in Costa Rica with design, permits, and execution roadmap.`;
 }
 
 export default async function handler(req, res) {
@@ -145,7 +206,7 @@ export default async function handler(req, res) {
   if (!process.env.APP_PASSWORD) return res.status(500).json({ error: "APP_PASSWORD is not configured" });
   if (req.body?.password !== process.env.APP_PASSWORD) return res.status(401).json({ error: "Unauthorized" });
 
-  const ip = getIp(req);
+  const ip = (req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "unknown").toString().split(",")[0].trim();
   const now = Date.now();
   const windowStart = now - 3600000;
   const timestamps = (RATE_LIMIT.get(ip) || []).filter((t) => t > windowStart);
@@ -159,6 +220,7 @@ export default async function handler(req, res) {
 
   try {
     if (!process.env.SEARCH_API_KEY) return res.status(500).json({ error: "No SEARCH_API_KEY configured" });
+
     const rawResults = [];
     for (const q of selectedQueries) {
       await new Promise((r) => setTimeout(r, 300));
@@ -166,13 +228,18 @@ export default async function handler(req, res) {
     }
 
     const leads = [];
+    const debugRejections = [];
     let filteredProviderCount = 0;
+    let filteredIrrelevantCount = 0;
+
     for (const result of rawResults.slice(0, MAX_RESULTS)) {
       if (!result.link?.startsWith("http")) continue;
+
       let pageText = `${result.title} ${result.snippet}`;
       let htmlForDate = "";
       let publishedAtDate = parseDateCandidate(result.published_at);
       let publishedAtSource = publishedAtDate ? "search_result" : "unknown";
+
       try {
         await new Promise((r) => setTimeout(r, 220));
         const pageRes = await fetchWithTimeout(result.link, { headers: SAFE_HEADERS });
@@ -188,35 +255,61 @@ export default async function handler(req, res) {
       }
       if (publishedAtDate && isOlderThanDays(publishedAtDate, safeMaxAgeDays)) continue;
 
-      const combined = `${result.title} ${result.snippet} ${pageText}`;
-      const intentType = classifyIntent(combined, result.link);
-      if (intentType === "Company/Provider") { filteredProviderCount++; if (onlyPersonIntent) continue; }
-      if (onlyPersonIntent && intentType !== "Person Intent Lead") continue;
+      const evidenceText = `${result.snippet || pageText.slice(0, 240)}`.slice(0, 420);
+      const validation = isValidPersonIntentLead({
+        source_url: result.link,
+        evidence_text: evidenceText,
+        title: result.title,
+        snippet: result.snippet,
+        pageText: pageText.slice(0, 1500),
+      });
+
+      if (!validation.valid) {
+        if (validation.reasons.some((r) => r.includes("provider") || r.includes("showcase") || r.includes("project"))) filteredProviderCount++;
+        else filteredIrrelevantCount++;
+        if (debugRejections.length < 12) debugRejections.push({ source_url: result.link, reasons: validation.reasons, title: result.title.slice(0, 140) });
+        continue;
+      }
+
+      const need = extractNeedFromEvidence(evidenceText);
+      if (!need) {
+        filteredIrrelevantCount++;
+        continue;
+      }
 
       const emails = extractEmails(pageText);
       const phones = extractPhones(pageText);
-      const contactUrl = (pageText.match(/https?:\/\/[^\s"'<>]+contact[^\s"'<>]*/i) || [""])[0];
-      const location = detectLocation(combined);
-      const lead_type = getLeadType(combined);
-      const relevance = scoreLead({ text: combined, location, hasContact: !!(emails[0] || phones[0] || contactUrl), intentType, sourceUrl: result.link });
-      if (relevance < 4) continue;
+      const location = detectLocation(`${result.title} ${result.snippet} ${pageText.slice(0, 1200)}`);
+      const intent_type = "Person Intent Lead";
+      const lead_type = getLeadType(`${result.title} ${result.snippet} ${evidenceText}`);
+
+      const combinedLower = normalize(`${result.title} ${result.snippet} ${pageText}`);
+      const providerContactPage = PROVIDER_SIGNALS.some((re) => re.test(combinedLower));
+      const safeEmail = providerContactPage ? "" : (emails[0] || "");
+      const safePhone = providerContactPage ? "" : (phones[0] || "");
+
+      const relevance = scoreLead({ evidenceText, location, hasContact: !!(safeEmail || safePhone || result.link), sourceUrl: result.link });
+      if (relevance === 0) {
+        filteredIrrelevantCount++;
+        continue;
+      }
 
       const lead = {
         name: "",
         company_or_profile: result.title.slice(0, 120),
         lead_type,
-        intent_type: intentType,
-        need: result.query,
+        intent_type,
+        need,
         location,
         country_or_origin: "",
-        email: emails[0] || "",
-        phone: phones[0] || "",
+        email: safeEmail,
+        phone: safePhone,
         website: new URL(result.link).origin,
         social_url: SOURCE_PRIORITIES.some((p) => result.link.toLowerCase().includes(p)) ? result.link : "",
-        contact_url: contactUrl,
+        contact_url: "",
         source_platform: result.source_platform,
         source_url: result.link,
-        evidence_text: `${result.snippet || pageText.slice(0, 220)} | Query: ${result.query}`.slice(0, 420),
+        evidence_text: evidenceText,
         relevance,
         confidence: relevance >= 8 ? "high" : relevance >= 6 ? "medium" : "low",
         recommended_outreach: "",
@@ -224,7 +317,11 @@ export default async function handler(req, res) {
         published_at_source: publishedAtSource,
       };
 
-      if (!lead.source_url || !lead.evidence_text) continue;
+      if (onlyPersonIntent && lead.intent_type !== "Person Intent Lead") {
+        filteredIrrelevantCount++;
+        continue;
+      }
+
       if (lead.email && !pageText.includes(lead.email)) lead.email = "";
       if (lead.phone && !normalize(pageText).includes(normalize(lead.phone))) lead.phone = "";
       lead.recommended_outreach = buildOutreach(lead);
@@ -232,8 +329,13 @@ export default async function handler(req, res) {
     }
 
     const finalLeads = deduplicate(leads).slice(0, Math.max(1, Math.min(maxLeads, 50)));
-    if (!finalLeads.length) return res.status(200).json({ leads: [], warning: "No person-intent leads found" , filtered_provider_count: filteredProviderCount});
-    return res.status(200).json({ leads: finalLeads, filtered_provider_count: filteredProviderCount });
+    return res.status(200).json({
+      leads: finalLeads,
+      filtered_provider_count: filteredProviderCount,
+      filtered_irrelevant_count: filteredIrrelevantCount,
+      debug_sample_rejections: debugRejections,
+      warning: finalLeads.length ? "" : "No strict person-intent leads found",
+    });
   } catch (error) {
     if (String(error.message || "").includes("NO_SEARCH_API_KEY")) return res.status(500).json({ error: "No API key configured for search provider" });
     if (String(error.message || "").includes("SEARCH_PROVIDER_FAILURE")) return res.status(502).json({ error: "Search provider failure" });
