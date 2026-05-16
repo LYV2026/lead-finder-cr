@@ -1,36 +1,25 @@
 # Lead Finder CR (AK Studio / Arquinautas CR)
 
-Real lead discovery app focused on **individual person-intent leads** for Costa Rica architecture/remodel/build projects.
+Real lead discovery app focused on **individual person-intent leads** in Costa Rica (build/remodel/buy land + build).
 
-## What this app does
-- Uses public web search (SerpAPI via `SEARCH_API_KEY`) to discover relevant public pages/posts.
-- Prioritizes people publicly asking for help with building/remodeling/architect needs in Costa Rica.
-- Excludes provider/company/service pages by default.
-- Extracts public evidence and contact details only when publicly visible.
-- Never invents names/emails/phones.
-- Includes freshness filtering (default: 180 days), relevance scoring, deduplication, and provider-filter counters.
+## Features
+- Vite + React frontend, Vercel serverless backend.
+- Public search pipeline using SerpAPI (`SEARCH_API_KEY`).
+- Strict intent validation from source evidence text.
+- Hard rejection of provider/showcase/architecture-content pages.
+- 6-month freshness filter by default (`maxAgeDays=180`).
+- Filters, CSV export, source verification links, and outreach copy button.
+- Debug counters for filtered provider and irrelevant pages.
 
-## Core lead fields
-Includes:
-- `lead_type`
-- `intent_type` (`Person Intent Lead | Company/Provider | Unclear`)
-- `source_url`
-- `evidence_text`
-- `published_at`, `published_at_source`
-- `relevance`, `confidence`
-- `recommended_outreach`
-- plus contact/public profile fields.
-
-## Environment variables
-Required:
+## Required environment variables
 - `APP_PASSWORD`
 - `SEARCH_API_KEY`
 
-Optional:
+## Optional environment variables
 - `ANTHROPIC_API_KEY`
 - `OPENAI_API_KEY`
 
-## Local development
+## Local setup
 ```bash
 npm install
 cp .env.example .env.local
