@@ -1,212 +1,143 @@
-import { useState, useCallback } from "react";
+import { useMemo, useState } from "react";
 
-const SEARCH_SOURCES = [
-  { id: "reddit",  label: "Reddit",       icon: "🟠" },
-  { id: "expat",   label: "Foros Expats", icon: "🌎" },
-  { id: "luxury",  label: "Mercado Lujo", icon: "✨" },
+const DEFAULT_QUERIES = [
+  "looking to build a house in Costa Rica",
+  "architect Costa Rica custom home",
+  "buy land build home Costa Rica",
+  "Costa Rica vacation rental development",
+  "build Airbnb Costa Rica",
+  "retiring in Costa Rica build home",
+  "Guanacaste architect build house",
+  "Tamarindo build villa",
+  "Nosara custom home",
+  "Uvita build rental property",
+  "Costa Rica construction permit architect",
 ];
 
-const SCALE_COLORS  = { small: "#4ade80", medium: "#facc15", large: "#fb923c", luxury: "#e879f9" };
-const SCALE_LABELS  = { small: "Pequeño", medium: "Mediano", large: "Grande",  luxury: "Lujo"    };
+const LOCATIONS = ["All","Guanacaste","Tamarindo","Nosara","Uvita","Dominical","Manuel Antonio","San José","Atenas","Escazú","Santa Ana","Caribbean/Limón"];
+const LEAD_TYPES = ["All","Expat relocation","Investor/Airbnb","Local homeowner","Developer","Land buyer","Renovation/remodel"];
+const CONTACT_STATUS = ["all","has email","has phone","has contact URL","no direct contact"];
 
-export default function LeadFinder() {
-  const [password,        setPassword]        = useState("");
-  const [authed,          setAuthed]          = useState(false);
-  const [authError,       setAuthError]       = useState("");
-  const [selectedSources, setSelectedSources] = useState(["reddit", "expat", "luxury"]);
-  const [leads,           setLeads]           = useState([]);
-  const [loading,         setLoading]         = useState(false);
-  const [error,           setError]           = useState("");
-  const [searched,        setSearched]        = useState(false);
+const BRAND = {
+  deep: "#0C1627",
+  deep2: "#13263A",
+  gold: "#C7A15A",
+  goldSoft: "#E8D3A6",
+  ink: "#0F1115",
+  text: "#F6F2E9",
+  muted: "#A5B0BE",
+};
 
-  /* ── Auth ────────────────────────────────────────────────── */
-  const handleLogin = () => {
-    if (!password.trim()) { setAuthError("Ingresá la contraseña"); return; }
-    // We'll verify on first real API call; optimistically unlock UI
-    setAuthed(true);
-    setAuthError("");
-  };
-
-  /* ── Sources ─────────────────────────────────────────────── */
-  const toggleSource = (id) =>
-    setSelectedSources((prev) =>
-      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
-    );
-
-  /* ── Search ──────────────────────────────────────────────── */
-  const fetchLeads = useCallback(async () => {
-    setLoading(true);
-    setLeads([]);
-    setError("");
-    setSearched(false);
-
-    try {
-      const res = await fetch("/api/search-leads", {   // ✅ hits our serverless function
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password, sources: selectedSources }),
-      });
-
-      if (res.status === 401) { setAuthed(false); setAuthError("Contraseña incorrecta"); return; }
-      if (res.status === 429) { setError("Límite de búsquedas alcanzado. Intentá en 1 hora."); return; }
-      if (!res.ok)            { setError("Error del servidor. Intentá de nuevo."); return; }
-
-      const data = await res.json();
-      setLeads(data.leads || []);
-    } catch (e) {
-      setError("No se pudo conectar. Verificá tu conexión.");
-    } finally {
-      setLoading(false);
-      setSearched(true);
-    }
-  }, [password, selectedSources]);
-
-  /* ── Export CSV ──────────────────────────────────────────── */
-  const exportCSV = () => {
-    const header = "Plataforma,Usuario,Necesidad,Escala,Ubicación,URL,Relevancia\n";
-    const rows   = leads
-      .map((l) =>
-        [l.platform, l.user, l.need, l.scale, l.location || "", l.url || "", l.relevance]
-          .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-          .join(",")
-      )
-      .join("\n");
-    const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8;" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href     = url;
-    a.download = `leads_cr_${new Date().toISOString().slice(0,10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  /* ── Styles ──────────────────────────────────────────────── */
-  const s = {
-    page:    { minHeight:"100vh", background:"linear-gradient(135deg,#0a0e1a 0%,#0f1e2e 50%,#071218 100%)", fontFamily:"Georgia,serif", color:"#e8dfc8", padding:0 },
-    header:  { borderBottom:"1px solid rgba(180,150,80,.25)", padding:"32px 40px 24px", background:"rgba(0,0,0,.3)" },
-    h1:      { fontSize:"clamp(26px,5vw,44px)", fontWeight:400, margin:"8px 0 6px", background:"linear-gradient(135deg,#e8dfc8 0%,#b49650 50%,#e8dfc8 100%)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" },
-    label:   { fontSize:11, letterSpacing:5, color:"#b49650", textTransform:"uppercase" },
-    body:    { maxWidth:900, margin:"0 auto", padding:"32px 24px" },
-    input:   { width:"100%", padding:"12px 16px", background:"rgba(255,255,255,.04)", border:"1px solid rgba(180,150,80,.3)", borderRadius:4, color:"#e8dfc8", fontSize:14, outline:"none", boxSizing:"border-box" },
-    btn:     (disabled) => ({ width:"100%", padding:"16px", background: disabled ? "rgba(180,150,80,.1)" : "linear-gradient(135deg,rgba(180,150,80,.3),rgba(120,100,50,.4))", border:"1px solid rgba(180,150,80,.5)", borderRadius:6, color: disabled ? "#5a6a7a" : "#e8dfc8", fontSize:14, letterSpacing:3, textTransform:"uppercase", cursor: disabled ? "not-allowed" : "pointer" }),
-    chip:    (active) => ({ padding:"10px 20px", border: active ? "1px solid #b49650" : "1px solid rgba(180,150,80,.25)", background: active ? "rgba(180,150,80,.15)" : "rgba(255,255,255,.03)", color: active ? "#e8dfc8" : "#5a6a7a", borderRadius:4, cursor:"pointer", fontSize:13 }),
-    card:    (scale) => ({ padding:"20px 24px", background:"rgba(255,255,255,.03)", border:"1px solid rgba(180,150,80,.15)", borderLeft:`3px solid ${SCALE_COLORS[scale]||"#b49650"}`, borderRadius:"0 6px 6px 0", marginBottom:14 }),
-    errBox:  { padding:"12px 18px", background:"rgba(239,68,68,.1)", border:"1px solid rgba(239,68,68,.3)", borderRadius:4, color:"#f87171", fontSize:13, marginBottom:20 },
-  };
-
-  /* ── Login screen ────────────────────────────────────────── */
-  if (!authed) return (
-    <div style={s.page}>
-      <div style={s.header}><div style={{ maxWidth:900, margin:"0 auto" }}>
-        <p style={s.label}>Herramienta Privada</p>
-        <h1 style={s.h1}>Buscador de Clientes</h1>
-        <p style={{ color:"#8a9ab0", fontSize:14, margin:0 }}>Arquitectura · Costa Rica</p>
-      </div></div>
-
-      <div style={{ ...s.body, maxWidth:400 }}>
-        <p style={{ ...s.label, marginBottom:14 }}>Acceso</p>
-        {authError && <div style={s.errBox}>{authError}</div>}
-        <input
-          style={{ ...s.input, marginBottom:14 }}
-          type="password"
-          placeholder="Contraseña"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-        />
-        <button style={s.btn(false)} onClick={handleLogin}>→ Ingresar</button>
-      </div>
-    </div>
-  );
-
-  /* ── Main app ────────────────────────────────────────────── */
+function AKLogo() {
   return (
-    <div style={s.page}>
-      {/* Header */}
-      <div style={s.header}><div style={{ maxWidth:900, margin:"0 auto" }}>
-        <p style={s.label}>Herramienta de Prospección</p>
-        <h1 style={s.h1}>Buscador de Clientes</h1>
-        <p style={{ color:"#8a9ab0", fontSize:14, margin:0 }}>Arquitectura · Costa Rica · Generación de Leads con IA</p>
-      </div></div>
-
-      <div style={s.body}>
-        {/* Source selector */}
-        <p style={{ ...s.label, marginBottom:14 }}>Fuentes de Búsqueda</p>
-        <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:28 }}>
-          {SEARCH_SOURCES.map((src) => (
-            <button key={src.id} style={s.chip(selectedSources.includes(src.id))} onClick={() => toggleSource(src.id)}>
-              {src.icon} {src.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Search button */}
-        <button
-          style={{ ...s.btn(loading || selectedSources.length === 0), marginBottom:28 }}
-          disabled={loading || selectedSources.length === 0}
-          onClick={fetchLeads}
-        >
-          {loading ? "⟳  Buscando en internet..." : "◈  Buscar Clientes Potenciales"}
-        </button>
-
-        {/* Error */}
-        {error && <div style={s.errBox}>⚠ {error}</div>}
-
-        {/* Results header */}
-        {leads.length > 0 && (
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20, flexWrap:"wrap", gap:10 }}>
-            <p style={{ ...s.label, margin:0 }}>Leads Encontrados — {leads.length} resultados</p>
-            <button
-              onClick={exportCSV}
-              style={{ padding:"8px 18px", background:"rgba(180,150,80,.15)", border:"1px solid rgba(180,150,80,.4)", borderRadius:4, color:"#b49650", fontSize:12, cursor:"pointer", letterSpacing:1 }}
-            >
-              ↓ Exportar CSV
-            </button>
-          </div>
-        )}
-
-        {/* Lead cards */}
-        {leads.map((lead, i) => (
-          <div key={i} style={s.card(lead.scale)}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10, flexWrap:"wrap", gap:8 }}>
-              <div style={{ display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" }}>
-                <span style={{ fontSize:11, color:"#5a6a7a" }}>{lead.platform}</span>
-                {lead.scale && (
-                  <span style={{ fontSize:10, padding:"2px 10px", borderRadius:3, background:`${SCALE_COLORS[lead.scale]}22`, border:`1px solid ${SCALE_COLORS[lead.scale]}55`, color:SCALE_COLORS[lead.scale], letterSpacing:1, textTransform:"uppercase" }}>
-                    {SCALE_LABELS[lead.scale] || lead.scale}
-                  </span>
-                )}
-                {lead.location && <span style={{ fontSize:11, color:"#4a8a6a" }}>📍 {lead.location}</span>}
-              </div>
-              {/* Relevance bar */}
-              <div style={{ display:"flex", gap:2, alignItems:"center" }}>
-                {[...Array(10)].map((_,j) => (
-                  <div key={j} style={{ width:4, height:14, borderRadius:2, background: j < (lead.relevance||0) ? "#b49650" : "rgba(180,150,80,.15)" }} />
-                ))}
-                <span style={{ fontSize:11, color:"#b49650", marginLeft:6 }}>{lead.relevance}/10</span>
-              </div>
-            </div>
-
-            {lead.user && <div style={{ fontSize:12, color:"#7a9aaa", marginBottom:8 }}>👤 {lead.user}</div>}
-            <p style={{ fontSize:14, color:"#c8bfa8", margin:"0 0 12px", lineHeight:1.6 }}>{lead.need}</p>
-            {lead.url?.startsWith("http") && (
-              <a href={lead.url} target="_blank" rel="noopener noreferrer"
-                style={{ fontSize:11, color:"#b49650", textDecoration:"none", borderBottom:"1px solid rgba(180,150,80,.3)" }}>
-                → Ver publicación original
-              </a>
-            )}
-          </div>
-        ))}
-
-        {/* Empty state */}
-        {searched && leads.length === 0 && !loading && (
-          <div style={{ textAlign:"center", padding:"60px 20px", border:"1px solid rgba(180,150,80,.15)", borderRadius:8, color:"#5a6a7a" }}>
-            <div style={{ fontSize:40, marginBottom:16 }}>🌿</div>
-            <p>No se encontraron leads en esta búsqueda.</p>
-            <p style={{ fontSize:12 }}>Intenta activar más fuentes o busca de nuevo.</p>
-          </div>
-        )}
+    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <svg width="46" height="46" viewBox="0 0 46 46" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="AK Studio logo">
+        <rect x="1" y="1" width="44" height="44" rx="10" stroke={BRAND.gold} strokeWidth="1.5" fill="rgba(255,255,255,0.02)" />
+        <path d="M11 33L18 13H21L28 33H24.8L23.2 28H15.8L14.2 33H11ZM16.6 25.5H22.3L19.5 17.1L16.6 25.5Z" fill={BRAND.goldSoft} />
+        <path d="M30 13V33H33V25.4L38.7 33H42.5L35.8 24.3L42.1 13H38.5L33 22.8V13H30Z" fill={BRAND.gold} />
+      </svg>
+      <div>
+        <div style={{ fontWeight: 700, letterSpacing: 1.5, color: BRAND.goldSoft }}>AK STUDIO</div>
+        <div style={{ fontSize: 12, color: BRAND.muted, letterSpacing: 1 }}>Arquinautas CR</div>
       </div>
     </div>
   );
 }
+
+export default function App() {
+  const [password, setPassword] = useState("");
+  const [authed, setAuthed] = useState(false);
+  const [queries, setQueries] = useState(DEFAULT_QUERIES.join("\n"));
+  const [leads, setLeads] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [warning, setWarning] = useState("");
+
+  const [locationFilter, setLocationFilter] = useState("All");
+  const [typeFilter, setTypeFilter] = useState("All");
+  const [contactFilter, setContactFilter] = useState("all");
+  const [minRelevance, setMinRelevance] = useState(1);
+  const [maxAgeDays, setMaxAgeDays] = useState(180);
+
+  const fetchLeads = async () => {
+    setLoading(true); setError(""); setWarning("");
+    try {
+      const res = await fetch("/api/search-leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password, queries: queries.split("\n").map((q) => q.trim()).filter(Boolean), maxAgeDays }),
+      });
+      const data = await res.json();
+      if (res.status === 401) { setAuthed(false); setError("Invalid password."); return; }
+      if (!res.ok) { setError(data.error || "Search failed."); return; }
+      setLeads(data.leads || []);
+      setWarning(data.warning || "");
+    } catch {
+      setError("Network error.");
+    } finally { setLoading(false); }
+  };
+
+  const filteredLeads = useMemo(() => leads.filter((l) => {
+    if ((l.relevance || 0) < minRelevance) return false;
+    if (locationFilter !== "All" && !(l.location || "").toLowerCase().includes(locationFilter.toLowerCase().replace("/", " "))) return false;
+    if (typeFilter !== "All" && l.lead_type !== typeFilter) return false;
+    if (contactFilter === "has email" && !l.email) return false;
+    if (contactFilter === "has phone" && !l.phone) return false;
+    if (contactFilter === "has contact URL" && !l.contact_url) return false;
+    if (contactFilter === "no direct contact" && (l.email || l.phone)) return false;
+    return true;
+  }), [leads, minRelevance, locationFilter, typeFilter, contactFilter]);
+
+  const exportCsv = () => {
+    const fields = ["name","company_or_profile","lead_type","need","location","country_or_origin","email","phone","website","social_url","contact_url","source_platform","source_url","published_at","published_at_source","evidence_text","relevance","confidence","recommended_outreach"];
+    const lines = [fields.join(","), ...filteredLeads.map((lead) => fields.map((f) => `"${String(lead[f] || "").replace(/"/g,'""')}"`).join(","))];
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `lead_finder_cr_${new Date().toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url);
+  };
+
+  const copyOutreach = async (msg) => navigator.clipboard.writeText(msg || "");
+
+  if (!authed) return <div style={styles.page}><div style={styles.wrap}><AKLogo /><h1>Lead Discovery Console</h1><p style={{color:BRAND.muted}}>Private access</p><input type="password" value={password} onChange={(e)=>setPassword(e.target.value)} placeholder="APP_PASSWORD" style={styles.input}/><button style={styles.btn} onClick={()=> password ? setAuthed(true) : setError("Password required")}>Enter</button>{error && <p style={styles.err}>{error}</p>}</div></div>;
+
+  return <div style={styles.page}><div style={styles.wrap}><AKLogo /><h1>Costa Rica Lead Discovery</h1><p style={styles.disclaimer}>Compliance notice: results use public web pages and must be manually verified before outreach. Never assume contact data accuracy without checking the source page.</p>
+    <textarea rows={7} style={styles.input} value={queries} onChange={(e)=>setQueries(e.target.value)} />
+    <button style={styles.btn} onClick={fetchLeads} disabled={loading}>{loading ? "Searching public sources..." : "Search Leads"}</button>
+    {error && <p style={styles.err}>{error}</p>}{warning && <p>{warning}</p>}
+
+    <div style={styles.filters}>
+      <select value={locationFilter} onChange={(e)=>setLocationFilter(e.target.value)}>{LOCATIONS.map(v=><option key={v}>{v}</option>)}</select>
+      <select value={typeFilter} onChange={(e)=>setTypeFilter(e.target.value)}>{LEAD_TYPES.map(v=><option key={v}>{v}</option>)}</select>
+      <select value={contactFilter} onChange={(e)=>setContactFilter(e.target.value)}>{CONTACT_STATUS.map(v=><option key={v}>{v}</option>)}</select>
+      <label>Min relevance: {minRelevance}<input type="range" min="1" max="10" value={minRelevance} onChange={(e)=>setMinRelevance(Number(e.target.value))}/></label>
+      <label>Max age days<input type="number" min="1" max="3650" value={maxAgeDays} onChange={(e)=>setMaxAgeDays(Number(e.target.value) || 180)} /></label>
+      <button style={styles.btnSecondary} onClick={exportCsv}>Export CSV</button>
+    </div>
+
+    {filteredLeads.map((lead, i) => <div key={i} style={styles.card}>
+      <h3>{lead.name || lead.company_or_profile || "Unnamed public profile"}</h3>
+      <p><b>Need:</b> {lead.need}</p><p><b>Type:</b> {lead.lead_type} · <b>Location:</b> {lead.location} · <b>Relevance:</b> {lead.relevance}/10</p>
+      <p><b>Email:</b> {lead.email || ""} <b>Phone:</b> {lead.phone || ""}</p>
+      <p><b>Website:</b> {lead.website || ""}</p>
+      <p><b>Published:</b> {lead.published_at ? new Date(lead.published_at).toLocaleDateString() : "Unknown"} ({lead.published_at_source || "unknown"})</p>
+      <p><b>Evidence:</b> {lead.evidence_text}</p>
+      <p><b>Recommended outreach:</b> {lead.recommended_outreach}</p>
+      <div style={{display:"flex",gap:10}}>
+        <button style={styles.btnSecondary} onClick={()=>copyOutreach(lead.recommended_outreach)}>Copy outreach message</button>
+        <a href={lead.source_url} target="_blank" rel="noreferrer" style={{color:BRAND.goldSoft}}>Verify source</a>
+      </div>
+    </div>)}
+  </div></div>;
+}
+
+const styles = {
+  page: { minHeight: "100vh", background: `linear-gradient(135deg,${BRAND.deep},${BRAND.deep2})`, color: BRAND.text, fontFamily: "Inter, Arial", padding: 24 },
+  wrap: { maxWidth: 1000, margin: "0 auto" },
+  input: { width: "100%", padding: 10, marginBottom: 12, borderRadius: 8, border: `1px solid ${BRAND.gold}`, background: "rgba(255,255,255,.06)", color: BRAND.text },
+  btn: { background: BRAND.gold, color: BRAND.ink, border: 0, padding: "10px 14px", borderRadius: 8, cursor: "pointer", marginBottom: 12, fontWeight: 700 },
+  btnSecondary: { background: "#25384A", color: "#fff", border: `1px solid ${BRAND.gold}`, padding: "8px 12px", borderRadius: 8, cursor: "pointer" },
+  err: { color: "#ff8b8b" },
+  disclaimer: { background: "rgba(255,255,255,.08)", padding: 10, borderRadius: 8, border: `1px solid ${BRAND.gold}` },
+  filters: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 10, margin: "16px 0" },
+  card: { background: "rgba(255,255,255,.06)", border: `1px solid ${BRAND.gold}`, borderRadius: 12, padding: 14, marginBottom: 12 },
+};
