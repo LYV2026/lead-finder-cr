@@ -1,21 +1,34 @@
 # Lead Finder CR (AK Studio / Arquinautas CR)
 
-Real lead discovery app for Costa Rica architecture, remodeling, relocation and investment intent.
+Real lead discovery app focused on **individual person-intent leads** for Costa Rica architecture/remodel/build projects.
 
-## Features
-- Vite + React frontend, Vercel serverless backend.
-- `/api/search-leads` uses public web search results (SerpAPI via `SEARCH_API_KEY`).
-- Pulls public pages/snippets, extracts visible evidence and contact details only when found in source text.
-- Never invents contacts: if not verifiable from source text, contact fields stay blank.
-- Rate limiting, deduplication, relevance scoring, and 6-month freshness filter (180 days default).
-- UI filters: location, lead type, minimum relevance, contact status, max age days.
-- CSV export includes full lead schema (including publication metadata).
-- Lead cards include source verification and copyable outreach message.
+## What this app does
+- Uses public web search (SerpAPI via `SEARCH_API_KEY`) to discover relevant public pages/posts.
+- Prioritizes people publicly asking for help with building/remodeling/architect needs in Costa Rica.
+- Excludes provider/company/service pages by default.
+- Extracts public evidence and contact details only when publicly visible.
+- Never invents names/emails/phones.
+- Includes freshness filtering (default: 180 days), relevance scoring, deduplication, and provider-filter counters.
+
+## Core lead fields
+Includes:
+- `lead_type`
+- `intent_type` (`Person Intent Lead | Company/Provider | Unclear`)
+- `source_url`
+- `evidence_text`
+- `published_at`, `published_at_source`
+- `relevance`, `confidence`
+- `recommended_outreach`
+- plus contact/public profile fields.
 
 ## Environment variables
-- `APP_PASSWORD` (required)
-- `SEARCH_API_KEY` (required)
-- `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` (optional)
+Required:
+- `APP_PASSWORD`
+- `SEARCH_API_KEY`
+
+Optional:
+- `ANTHROPIC_API_KEY`
+- `OPENAI_API_KEY`
 
 ## Local development
 ```bash
