@@ -1,6 +1,6 @@
 const RATE_LIMIT = new Map();
 const MAX_REQUESTS_PER_HOUR = 20;
-const MAX_RESULTS = 30;
+const MAX_RESULTS = 60;
 const FETCH_TIMEOUT_MS = 12000;
 const DEFAULT_MAX_AGE_DAYS = 180;
 
@@ -20,6 +20,13 @@ const DEFAULT_QUERIES = [
   'site:reddit.com/r/expats "moving to costa rica" "build"',
   '"costa rica expat forum" "can anyone recommend" architect',
   '"bought land in costa rica" "need architect"',
+  '"Nosara" "build a house" architect forum',
+  '"Santa Teresa" "architect recommendations"',
+  '"Tamarindo" "build house" architect',
+  '"Uvita" "bought land" construction',
+  '"Dominical" "architect" build home',
+  '"busco arquitecto" "Guanacaste"',
+  '"quiero construir" "Santa Teresa"',
   '"bought land in costa rica" "building"',
   '"Costa Rica" "architect recommendations" forum',
   '"Costa Rica" "building a house" "recommend"',
@@ -91,9 +98,13 @@ const PROVIDER_SIGNALS = [
 ];
 
 const SHOWCASE_DOMAINS = ["archdaily", "dezeen", "amazing_architecture", "archviz", "behance.net", "dribbble.com"];
-const LOCATION_KEYWORDS = ["costa rica", "guanacaste", "tamarindo", "nosara", "uvita", "dominical", "manuel antonio", "san jose", "san josé", "atenas", "escazu", "escazú", "santa ana", "limon", "limón"];
+const COASTAL_LOCATIONS = ["nosara","santa teresa","tamarindo","uvita","dominical","ojochal","playa hermosa","guanacaste","montezuma","samara","flamingo","papagayo","puerto viejo","limon","limón","manuel antonio","quepos","playa grande","costa ballena"];
+const LOCATION_KEYWORDS = [...COASTAL_LOCATIONS,"costa rica","san jose","san josé","atenas","escazu","escazú","santa ana"];
+const isCommunityUrl = url => SOURCE_PRIORITIES.some(p => url.toLowerCase().includes(p));
+const isCoastal = text => COASTAL_LOCATIONS.some(p => normalize(text).includes(p));
+const detectLanguage = text => { const t=normalize(text); const es=(t.match(/\b(que|quiero|busco|casa|terreno|arquitecto|construir|lote|necesito)\b/g)||[]).length; const en=(t.match(/\b(the|looking|need|architect|build|house|land|want)\b/g)||[]).length; return es>en?"es":"en"; };
 
-const SAFE_HEADERS = { "User-Agent": "AKStudioLeadFinder/1.0 (+https://akstudio.example; respectful crawling)", "Accept": "text/html,application/xhtml+xml" };
+const SAFE_HEADERS = { "User-Agent": "AKStudioLeadFinder/1.2 (+https://akstudio.es; respectful crawling)", "Accept": "text/html,application/xhtml+xml" };
 const normalize = (s = "") => s.toLowerCase().replace(/\s+/g, " ").trim();
 const extractEmails = (t) => [...new Set((t.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || []).map((e) => e.trim()))];
 function extractPhones(text) { const c = text.match(/(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{2,4}\)?[\s.-]?){2,4}\d{2,4}/g) || []; return [...new Set(c.map((p) => p.replace(/\s+/g, " ").trim()).filter((p) => { const l = p.replace(/\D/g, "").length; return l >= 8 && l <= 15; }))]; }
@@ -121,10 +132,11 @@ function isValidPersonIntentLead({ source_url, evidence_text, title, snippet, pa
   const lc = normalize(combined);
   if (!source_url) reasons.push("missing_source_url");
   if (!evidence_text) reasons.push("missing_evidence_text");
-  if (PROVIDER_SIGNALS.some((re) => re.test(lc))) reasons.push("provider_signal_detected");
+  if (!isCommunityUrl(source_url) && PROVIDER_SIGNALS.some((re) => re.test(normalize(`${title} ${source_url}`)))) reasons.push("provider_signal_detected");
   if (SHOWCASE_DOMAINS.some((d) => lc.includes(d))) reasons.push("showcase_domain_or_subreddit");
   if (/\b(villa|house|project)\s+by\b/i.test(lc)) reasons.push("completed_project_by_studio_pattern");
-  const intentText = normalize(`${title} ${snippet} ${pageText.slice(0, 1500)} ${source_url}`);
+  // For forum threads, scraped page text includes replies from third parties. Only score title and search snippet.
+  const intentText = normalize(isCommunityUrl(source_url) ? `${title} ${snippet} costa rica` : `${title} ${snippet} ${pageText.slice(0, 1500)} ${source_url}`);
   const level = classifyIntentFromText(intentText);
   if (level === "unclear") reasons.push("missing_person_or_medium_intent");
   return { valid: reasons.length === 0, intentLevel: level, reasons };
@@ -149,9 +161,9 @@ function scoreLead({ intentLevel, location, hasContact, sourceUrl }) {
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = FETCH_TIMEOUT_MS) { const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), timeoutMs); try { return await fetch(url, { ...options, signal: ctrl.signal }); } finally { clearTimeout(t); } }
-async function searchWeb(query, num = 5) { const key = process.env.SEARCH_API_KEY; if (!key) throw new Error("NO_SEARCH_API_KEY"); const url = new URL("https://serpapi.com/search.json"); url.searchParams.set("engine", "google"); url.searchParams.set("q", query); url.searchParams.set("num", String(num)); url.searchParams.set("api_key", key); const res = await fetchWithTimeout(url.toString(), { headers: SAFE_HEADERS }); if (!res.ok) throw new Error(`SEARCH_PROVIDER_FAILURE_${res.status}`); const data = await res.json(); return (data.organic_results || []).map((r) => ({ title: r.title || "", snippet: r.snippet || "", link: r.link || "", source_platform: "Google/SerpAPI", published_at: r.date || "" })); }
+async function searchWeb(query, num = 10) { const key = process.env.SEARCH_API_KEY; if (!key) throw new Error("NO_SEARCH_API_KEY"); const url = new URL("https://serpapi.com/search.json"); url.searchParams.set("engine", "google"); url.searchParams.set("q", query); url.searchParams.set("num", String(num)); url.searchParams.set("api_key", key); const res = await fetchWithTimeout(url.toString(), { headers: SAFE_HEADERS }); if (!res.ok) throw new Error(`SEARCH_PROVIDER_FAILURE_${res.status}`); const data = await res.json(); return (data.organic_results || []).map((r) => ({ title: r.title || "", snippet: r.snippet || "", link: r.link || "", source_platform: "Google/SerpAPI", published_at: r.date || "" })); }
 function deduplicate(leads) { const seen = new Set(); return leads.filter((l) => { const key = normalize(l.source_url || l.email || l.phone || l.website || l.evidence_text.slice(0, 120)); if (!key || seen.has(key)) return false; seen.add(key); return true; }); }
-const buildOutreach = (lead) => `Hi ${lead.name || "there"}, I saw your public post about ${lead.need}. AK Studio / Arquinautas CR helps people planning to build in Costa Rica with design, permits, and execution roadmap.`;
+const buildOutreach = (lead) => lead.language === "es" ? `Hola, vi su publicación sobre construir en ${lead.location}. Somos AK Studio Arquitectos (akstudio.es), especialistas en diseño de viviendas y villas en Costa Rica. Con gusto podemos orientarle sobre el terreno, permisos y presupuesto inicial.` : `Hi! I saw your post about building in ${lead.location}. I'm with AK Studio Arquitectos (akstudio.es), a Costa Rican architecture studio focused on tropical homes and villas. Happy to offer initial guidance on land, permits and a rough budget.`;
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -163,7 +175,7 @@ export default async function handler(req, res) {
   timestamps.push(now); RATE_LIMIT.set(ip, timestamps);
 
   const { queries, maxLeads = 20, maxAgeDays = DEFAULT_MAX_AGE_DAYS, onlyPersonIntent = true } = req.body || {};
-  const selectedQueries = (Array.isArray(queries) && queries.length ? queries : DEFAULT_QUERIES).slice(0, 10);
+  const selectedQueries = (Array.isArray(queries) && queries.length ? queries : DEFAULT_QUERIES).filter(q => typeof q === "string" && q.length <= 350).slice(0, 12);
   const safeMaxAgeDays = Math.max(1, Math.min(3650, Number(maxAgeDays) || DEFAULT_MAX_AGE_DAYS));
 
   try {
@@ -171,7 +183,7 @@ export default async function handler(req, res) {
     const rawResults = [];
     for (const q of selectedQueries) {
       await new Promise((r) => setTimeout(r, 300));
-      for (const item of await searchWeb(q, 5)) rawResults.push({ query: q, ...item });
+      for (const item of await searchWeb(q, 10)) rawResults.push({ query: q, ...item });
     }
 
     const strongLeads = []; const mediumLeads = []; const debugRejections = [];
@@ -211,11 +223,11 @@ export default async function handler(req, res) {
       const location = detectLocation(`${result.title} ${result.snippet} ${pageText.slice(0, 1200)}`);
       const intent_type = "Person Intent Lead";
       const lead_type = getLeadType(`${result.title} ${result.snippet} ${evidenceText}`);
-      const combinedLower = normalize(`${result.title} ${result.snippet} ${pageText}`);
-      const providerContactPage = PROVIDER_SIGNALS.some((re) => re.test(combinedLower));
+      const combinedLower = normalize(`${result.title} ${result.snippet}`);
+      const providerContactPage = !isCommunityUrl(result.link) && PROVIDER_SIGNALS.some((re) => re.test(combinedLower));
       const safeEmail = providerContactPage ? "" : (emails[0] || "");
       const safePhone = providerContactPage ? "" : (phones[0] || "");
-      const relevance = scoreLead({ intentLevel: validation.intentLevel, location, hasContact: !!(safeEmail || safePhone || result.link), sourceUrl: result.link });
+      const relevance = scoreLead({ intentLevel: validation.intentLevel, location, hasContact: !!(safeEmail || safePhone), sourceUrl: result.link });
       if (relevance <= 1) { filteredIrrelevantCount++; continue; }
 
       const lead = {
@@ -223,6 +235,9 @@ export default async function handler(req, res) {
         company_or_profile: result.title.slice(0, 120),
         lead_type,
         intent_type,
+        coastal: isCoastal(`${result.title} ${result.snippet}`),
+        language: detectLanguage(`${result.title} ${result.snippet}`),
+        intent_level: validation.intentLevel,
         need,
         location,
         country_or_origin: "",
@@ -249,9 +264,9 @@ export default async function handler(req, res) {
 
     const dedupStrong = deduplicate(strongLeads);
     const dedupMedium = deduplicate(mediumLeads);
-    let finalLeads = dedupStrong;
+    let finalLeads = [...dedupStrong, ...dedupMedium].sort((a,b)=>b.relevance-a.relevance);
     let warning = "";
-    if (!finalLeads.length) {
+    if (!dedupStrong.length && dedupMedium.length) {
       finalLeads = dedupMedium;
       warning = "Showing medium-confidence public discussion leads because no high-confidence person-intent leads were found.";
     }
