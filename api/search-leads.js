@@ -1,7 +1,7 @@
 const RATE_LIMIT = new Map();
 const MAX_REQUESTS_PER_HOUR = 20;
-const MAX_RESULTS = 60;
-const FETCH_TIMEOUT_MS = 12000;
+const MAX_RESULTS = 36;
+const FETCH_TIMEOUT_MS = 5000;
 const DEFAULT_MAX_AGE_DAYS = 180;
 
 const DEFAULT_QUERIES = [
@@ -136,7 +136,7 @@ function isValidPersonIntentLead({ source_url, evidence_text, title, snippet, pa
   if (SHOWCASE_DOMAINS.some((d) => lc.includes(d))) reasons.push("showcase_domain_or_subreddit");
   if (/\b(villa|house|project)\s+by\b/i.test(lc)) reasons.push("completed_project_by_studio_pattern");
   // For forum threads, scraped page text includes replies from third parties. Only score title and search snippet.
-  const intentText = normalize(isCommunityUrl(source_url) ? `${title} ${snippet} costa rica` : `${title} ${snippet} ${pageText.slice(0, 1500)} ${source_url}`);
+  const intentText = normalize(isCommunityUrl(source_url) ? `${title} ${snippet}` : `${title} ${snippet} ${pageText.slice(0, 1500)} ${source_url}`);
   const level = classifyIntentFromText(intentText);
   if (level === "unclear") reasons.push("missing_person_or_medium_intent");
   return { valid: reasons.length === 0, intentLevel: level, reasons };
@@ -175,7 +175,8 @@ export default async function handler(req, res) {
   timestamps.push(now); RATE_LIMIT.set(ip, timestamps);
 
   const { queries, maxLeads = 20, maxAgeDays = DEFAULT_MAX_AGE_DAYS, onlyPersonIntent = true } = req.body || {};
-  const selectedQueries = (Array.isArray(queries) && queries.length ? queries : DEFAULT_QUERIES).filter(q => typeof q === "string" && q.length <= 350).slice(0, 12);
+  const selectedQueries = (Array.isArray(queries) && queries.length ? queries : DEFAULT_QUERIES).filter(q => typeof q === "string" && q.trim().length >= 3 && q.length <= 350).slice(0, 12);
+  if (!selectedQueries.length) return res.status(400).json({error:"At least one valid query is required"});
   const safeMaxAgeDays = Math.max(1, Math.min(3650, Number(maxAgeDays) || DEFAULT_MAX_AGE_DAYS));
 
   try {
@@ -218,9 +219,9 @@ export default async function handler(req, res) {
         continue;
       }
 
-      const need = extractNeedFromEvidence(`${result.title} ${result.snippet} ${pageText.slice(0, 1200)}`) || extractNeedFromEvidence(evidenceText) || "needs architecture/build guidance";
-      const emails = extractEmails(pageText); const phones = extractPhones(pageText);
-      const location = detectLocation(`${result.title} ${result.snippet} ${pageText.slice(0, 1200)}`);
+      const need = extractNeedFromEvidence(`${result.title} ${result.snippet}`) || extractNeedFromEvidence(evidenceText) || "needs architecture/build guidance";
+      const emails = extractEmails(`${result.title} ${result.snippet}`); const phones = extractPhones(`${result.title} ${result.snippet}`);
+      const location = detectLocation(`${result.title} ${result.snippet}`);
       const intent_type = "Person Intent Lead";
       const lead_type = getLeadType(`${result.title} ${result.snippet} ${evidenceText}`);
       const combinedLower = normalize(`${result.title} ${result.snippet}`);
@@ -253,6 +254,7 @@ export default async function handler(req, res) {
         confidence: relevance >= 8 ? "high" : relevance >= 6 ? "medium" : "low",
         recommended_outreach: "",
         published_at: publishedAtDate ? publishedAtDate.toISOString() : "",
+        date_verified: !!publishedAtDate,
         published_at_source: publishedAtSource,
       };
 
