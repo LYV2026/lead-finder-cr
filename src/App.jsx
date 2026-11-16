@@ -1,3 +1,4 @@
+import LandFinder from "./LandFinder.jsx";
 import { useMemo, useState } from "react";
 
 const DEFAULT_QUERIES = [
@@ -46,6 +47,7 @@ function AKLogo() {
 export default function App() {
   const [password, setPassword] = useState("");
   const [authed, setAuthed] = useState(false);
+  const [activeTab, setActiveTab] = useState("land");
   const [queries, setQueries] = useState(DEFAULT_QUERIES.join("\n"));
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -105,7 +107,7 @@ export default function App() {
 
   if (!authed) return <div style={styles.page}><div style={styles.wrap}><AKLogo /><h1>Lead Discovery Console</h1><p style={{color:BRAND.muted}}>Private access</p><input type="password" value={password} onChange={(e)=>setPassword(e.target.value)} placeholder="APP_PASSWORD" style={styles.input}/><button style={styles.btn} onClick={()=> password ? setAuthed(true) : setError("Password required")}>Enter</button>{error && <p style={styles.err}>{error}</p>}</div></div>;
 
-  return <div style={styles.page}><div style={styles.wrap}><AKLogo /><h1>Costa Rica Lead Discovery</h1><p style={styles.disclaimer}>Compliance notice: results use public web pages and must be manually verified before outreach. Never assume contact data accuracy without checking the source page.</p>
+  return <div style={styles.page}><div style={styles.wrap}><AKLogo /><nav style={{display:"flex",gap:10,flexWrap:"wrap",margin:"22px 0"}}><button style={activeTab === "land" ? styles.btn : styles.btnSecondary} onClick={()=>setActiveTab("land")}>Terrenos para Airbnb</button><button style={activeTab === "leads" ? styles.btn : styles.btnSecondary} onClick={()=>setActiveTab("leads")}>Clientes de arquitectura</button></nav>{activeTab === "land" ? <LandFinder password={password} /> : <><h1>Costa Rica Lead Discovery</h1><p style={styles.disclaimer}>Compliance notice: results use public web pages and must be manually verified before outreach. Never assume contact data accuracy without checking the source page.</p>
     <textarea rows={7} style={styles.input} value={queries} onChange={(e)=>setQueries(e.target.value)} />
     <button style={styles.btn} onClick={fetchLeads} disabled={loading}>{loading ? "Searching public sources..." : "Search Leads"}</button>
     {error && <p style={styles.err}>{error}</p>}{warning && <p>{warning}</p>}
@@ -136,7 +138,7 @@ export default function App() {
         <a href={lead.source_url} target="_blank" rel="noreferrer" style={{color:BRAND.goldSoft}}>Verify source</a>
       </div>
     </div>)}
-  </div></div>;
+  </>}</div></div>;
 }
 
 const styles = {
