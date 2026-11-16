@@ -1,26 +1,27 @@
-# Lead Finder CR (AK Studio / Arquinautas CR)
+# AK Studio — Explorador gratuito de terrenos para Airbnb
 
-Real lead discovery app focused on **individual person-intent leads** in Costa Rica (build/remodel/buy land + build).
+Rama experimental sin servicios de búsqueda de pago. Mantiene el código histórico de Lead Finder en `main`.
 
-## Features
-- Vite + React frontend, Vercel serverless backend.
-- Public search pipeline using SerpAPI (`SEARCH_API_KEY`).
-- Strict intent validation from source evidence text.
-- Hard rejection of provider/showcase/architecture-content pages.
-- 6-month freshness filter by default (`maxAgeDays=180`).
-- Filters, CSV export, source verification links, and outreach copy button.
-- Debug counters for filtered provider and irrelevant pages.
+## Lo que funciona sin facturación
+- Elegir un punto turístico de Guanacaste, Puntarenas, Limón o San Carlos.
+- Dibujar círculos de 1, 2, 3 y 5 km con Leaflet y mosaicos públicos de OpenStreetMap.
+- Abrir búsquedas manuales de anuncios en buscadores públicos y portales inmobiliarios.
+- Copiar coordenadas de un terreno encontrado, guardarlo en el navegador y medir la distancia en línea recta al punto de referencia.
+- Filtrar visualmente candidatos dentro/fuera del radio y exportar CSV.
 
-## Required environment variables
-- `APP_PASSWORD`
-- `SEARCH_API_KEY`
+## Restricciones y verificación
+- **No hay búsqueda automática de anuncios**; se desactivó SerpAPI y se borraron las rutas API de pago.
+- Las coordenadas de las referencias son aproximadas. Los anuncios y coordenadas de los terrenos deben verificarse manualmente.
+- No determina distancias por carretera, proximidad real a ríos, mapas de inundación, permisos, ZMT, disponibilidad de agua, potencial de ocupación o viabilidad constructiva.
+- Los candidatos quedan en `localStorage` de ese navegador; no se sincronizan entre dispositivos.
+- Leaflet se carga desde un CDN público y el mapa utiliza mosaicos OpenStreetMap; ambos son servicios de terceros gratuitos que pueden estar temporalmente limitados o indisponibles. Respetar https://operations.osmfoundation.org/policies/tiles/ y mostrar atribución.
+- No se requiere Google Maps Platform ni tarjeta bancaria.
+- Esta rama NO ofrece autenticación real: es una app de exploración sin datos privados de servidor. No publicar información confidencial.
+- El plan Hobby gratuito de Vercel está limitado a uso personal/no comercial. Para uso empresarial de AK Studio, comprobar los términos y elegir un alojamiento gratuito que permita ese uso. No hay despliegue automático realizado desde este cambio.
 
-## Optional environment variables
-- `ANTHROPIC_API_KEY`
-- `OPENAI_API_KEY`
-
-## Local setup
+## Desarrollo
 ```bash
-npm install
-cp .env.example .env.local
+npm ci
 npm run dev
+npm run build
+```
