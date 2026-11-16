@@ -45,8 +45,6 @@ function AKLogo() {
 }
 
 export default function App() {
-  const [password, setPassword] = useState("");
-  const [authed, setAuthed] = useState(true);
   const [activeTab, setActiveTab] = useState("land");
   const [queries, setQueries] = useState(DEFAULT_QUERIES.join("\n"));
   const [leads, setLeads] = useState([]);
@@ -88,7 +86,6 @@ export default function App() {
 
   const copyOutreach = async (msg) => navigator.clipboard.writeText(msg || "");
 
-  if (false && !authed) return <div style={styles.page}><div style={styles.wrap}><AKLogo /><h1>Lead Discovery Console</h1><p style={{color:BRAND.muted}}>Private access</p><input type="password" value={password} onChange={(e)=>setPassword(e.target.value)} placeholder="APP_PASSWORD" style={styles.input}/><button style={styles.btn} onClick={()=> password ? setAuthed(true) : setError("Password required")}>Enter</button>{error && <p style={styles.err}>{error}</p>}</div></div>;
 
   return <div style={styles.page}><div style={styles.wrap}><AKLogo /><nav style={{display:"flex",gap:10,flexWrap:"wrap",margin:"22px 0"}}><button style={activeTab === "land" ? styles.btn : styles.btnSecondary} onClick={()=>setActiveTab("land")}>Terrenos para Airbnb</button><button style={activeTab === "leads" ? styles.btn : styles.btnSecondary} onClick={()=>setActiveTab("leads")}>Clientes de arquitectura</button></nav>{activeTab === "land" ? <LandFinder /> : <><h1>Costa Rica Lead Discovery</h1><p style={{color:BRAND.goldSoft}}>Modo sin servicios de pago: la función de búsqueda automática anterior está suspendida. Podés conservar el código histórico en la rama main mientras utilizás el explorador gratuito de terrenos.</p><p style={styles.disclaimer}>Compliance notice: results use public web pages and must be manually verified before outreach. Never assume contact data accuracy without checking the source page.</p>
     <textarea rows={7} style={styles.input} value={queries} onChange={(e)=>setQueries(e.target.value)} />
