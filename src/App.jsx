@@ -46,7 +46,7 @@ function AKLogo() {
 
 export default function App() {
   const [password, setPassword] = useState("");
-  const [authed, setAuthed] = useState(false);
+  const [authed, setAuthed] = useState(true);
   const [activeTab, setActiveTab] = useState("land");
   const [queries, setQueries] = useState(DEFAULT_QUERIES.join("\n"));
   const [leads, setLeads] = useState([]);
@@ -63,25 +63,8 @@ export default function App() {
   const [filteredProviderCount, setFilteredProviderCount] = useState(0);
   const [filteredIrrelevantCount, setFilteredIrrelevantCount] = useState(0);
 
-  const fetchLeads = async () => {
-    setLoading(true); setError(""); setWarning("");
-    try {
-      const res = await fetch("/api/search-leads", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password, queries: queries.split("\n").map((q) => q.trim()).filter(Boolean), maxAgeDays, onlyPersonIntent }),
-      });
-      const data = await res.json();
-      if (res.status === 401) { setAuthed(false); setError("Invalid password."); return; }
-      if (!res.ok) { setError(data.error || "Search failed."); return; }
-      setLeads(data.leads || []);
-      setWarning(data.warning || "");
-      setFilteredProviderCount(data.filtered_provider_count || 0);
-      setFilteredIrrelevantCount(data.filtered_irrelevant_count || 0);
-    } catch {
-      setError("Network error.");
-    } finally { setLoading(false); }
-  };
+  // Paid SerpAPI discovery has been explicitly disabled in the zero-cost edition.
+  const fetchLeads = () => setError("La búsqueda automática de clientes fue desactivada para evitar costos de SerpAPI. Usá búsquedas web gratuitas desde tu navegador.");
 
   const filteredLeads = useMemo(() => leads.filter((l) => {
     if (onlyPersonIntent && l.intent_type === "Company/Provider") return false;
@@ -105,11 +88,11 @@ export default function App() {
 
   const copyOutreach = async (msg) => navigator.clipboard.writeText(msg || "");
 
-  if (!authed) return <div style={styles.page}><div style={styles.wrap}><AKLogo /><h1>Lead Discovery Console</h1><p style={{color:BRAND.muted}}>Private access</p><input type="password" value={password} onChange={(e)=>setPassword(e.target.value)} placeholder="APP_PASSWORD" style={styles.input}/><button style={styles.btn} onClick={()=> password ? setAuthed(true) : setError("Password required")}>Enter</button>{error && <p style={styles.err}>{error}</p>}</div></div>;
+  if (false && !authed) return <div style={styles.page}><div style={styles.wrap}><AKLogo /><h1>Lead Discovery Console</h1><p style={{color:BRAND.muted}}>Private access</p><input type="password" value={password} onChange={(e)=>setPassword(e.target.value)} placeholder="APP_PASSWORD" style={styles.input}/><button style={styles.btn} onClick={()=> password ? setAuthed(true) : setError("Password required")}>Enter</button>{error && <p style={styles.err}>{error}</p>}</div></div>;
 
-  return <div style={styles.page}><div style={styles.wrap}><AKLogo /><nav style={{display:"flex",gap:10,flexWrap:"wrap",margin:"22px 0"}}><button style={activeTab === "land" ? styles.btn : styles.btnSecondary} onClick={()=>setActiveTab("land")}>Terrenos para Airbnb</button><button style={activeTab === "leads" ? styles.btn : styles.btnSecondary} onClick={()=>setActiveTab("leads")}>Clientes de arquitectura</button></nav>{activeTab === "land" ? <LandFinder password={password} /> : <><h1>Costa Rica Lead Discovery</h1><p style={styles.disclaimer}>Compliance notice: results use public web pages and must be manually verified before outreach. Never assume contact data accuracy without checking the source page.</p>
+  return <div style={styles.page}><div style={styles.wrap}><AKLogo /><nav style={{display:"flex",gap:10,flexWrap:"wrap",margin:"22px 0"}}><button style={activeTab === "land" ? styles.btn : styles.btnSecondary} onClick={()=>setActiveTab("land")}>Terrenos para Airbnb</button><button style={activeTab === "leads" ? styles.btn : styles.btnSecondary} onClick={()=>setActiveTab("leads")}>Clientes de arquitectura</button></nav>{activeTab === "land" ? <LandFinder /> : <><h1>Costa Rica Lead Discovery</h1><p style={{color:BRAND.goldSoft}}>Modo sin servicios de pago: la función de búsqueda automática anterior está suspendida. Podés conservar el código histórico en la rama main mientras utilizás el explorador gratuito de terrenos.</p><p style={styles.disclaimer}>Compliance notice: results use public web pages and must be manually verified before outreach. Never assume contact data accuracy without checking the source page.</p>
     <textarea rows={7} style={styles.input} value={queries} onChange={(e)=>setQueries(e.target.value)} />
-    <button style={styles.btn} onClick={fetchLeads} disabled={loading}>{loading ? "Searching public sources..." : "Search Leads"}</button>
+    <button style={styles.btn} onClick={fetchLeads} disabled={true}>{"Búsqueda automática desactivada (costo cero)"}</button>
     {error && <p style={styles.err}>{error}</p>}{warning && <p>{warning}</p>}
     <p style={{color: BRAND.muted, marginTop: 0}}>This tool prioritizes public posts from people showing building/remodeling intent. Contact details are only shown when publicly available.</p>
     <p style={{color: BRAND.muted}}>Provider/company pages filtered out: {filteredProviderCount}</p>
